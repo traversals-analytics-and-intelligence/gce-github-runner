@@ -18,12 +18,12 @@ inputs:
   project_id:
     description: >-
       ID of the Google Cloud Platform project. If provided, this will configure gcloud to use this project ID.
-    required: false
+    required: true
   service_account_key:
     description: >-
       The service account key which will be used for authentication credentials.
       This key should be created and stored as a secret. Should be JSON key.
-    required: false
+    required: true
   runner_ver:
     description: Version of the GitHub Runner.
     default: "2.290.1"
