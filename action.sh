@@ -33,6 +33,7 @@ shutdown_timeout=
 preemptible=
 ephemeral=
 actions_preinstalled=
+name_prefix=
 
 OPTLIND=1
 while getopts_long :h opt \
@@ -53,6 +54,7 @@ while getopts_long :h opt \
   preemptible required_argument \
   ephemeral required_argument \
   actions_preinstalled required_argument \
+  name_prefix optional_argument \
   help no_argument "" "$@"
 do
   case "$opt" in
@@ -107,6 +109,9 @@ do
     actions_preinstalled)
       actions_preinstalled=$OPTLARG
       ;;
+    name_prefix)
+      name_prefix=${OPTLARG-$name_prefix}
+      ;;
     h|help)
       usage
       exit 0
@@ -140,7 +145,7 @@ function start_vm {
       jq -r .token)
   echo "✅ Successfully got the GitHub Runner registration token"
 
-  VM_ID="gce-gh-runner-${GITHUB_RUN_ID}-${RANDOM}"
+  VM_ID="gce-gh-runner-${name_prefix}-${GITHUB_RUN_ID}-${RANDOM}"
   service_account_flag=$([[ -z "${runner_service_account}" ]] || echo "--service-account=${runner_service_account}")
   image_project_flag=$([[ -z "${image_project}" ]] || echo "--image-project=${image_project}")
   image_flag=$([[ -z "${image}" ]] || echo "--image=${image}")
@@ -158,7 +163,7 @@ function start_vm {
     ./svc.sh start && \\
     gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=1
     # 3 days represents the max workflow runtime. This will shutdown the instance if everything else fails.
-    echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone}\" | at now + 3 days
+    echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
     "
 
   if $actions_preinstalled ; then
@@ -204,7 +209,7 @@ function start_vm {
     echo "✅ ${VM_ID} ready ..."
   else
     echo "Waited 2 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
-    gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone}
+    gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}
     exit 1
   fi
 }
@@ -219,7 +224,7 @@ function stop_vm {
   NAME=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/name -H 'Metadata-Flavor: Google')
   ZONE=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/zone -H 'Metadata-Flavor: Google')
   echo "✅ Self deleting $NAME in $ZONE in ${shutdown_timeout} seconds ..."
-  echo "sleep ${shutdown_timeout}; gcloud --quiet compute instances delete $NAME --zone=$ZONE" --project  ${project_id} | env at now
+  echo "sleep ${shutdown_timeout}; gcloud --quiet compute instances delete $NAME --zone=$ZONE" --project=${project_id} | env at now
 }
 
 safety_on
