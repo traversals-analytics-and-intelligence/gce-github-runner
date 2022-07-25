@@ -221,6 +221,14 @@ function stop_vm {
   #       to do that. VM shutdown will disconnect the runner, and GH will unregister it
   #       in 30 days
   # TODO: RUNNER_ALLOW_RUNASROOT=1 /actions-runner/config.sh remove --token $TOKEN
+  
+  if [[ -z "${service_account_key}" ]] || [[ -z "${project_id}" ]]; then
+    echo "Won't authenticate gcloud. If you wish to authenticate gcloud provide both service_account_key and project_id."
+  else
+    echo "Will authenticate gcloud."
+    gcloud_auth
+  fi
+  
   NAME=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/name -H 'Metadata-Flavor: Google')
   ZONE=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/zone -H 'Metadata-Flavor: Google')
   echo "✅ Self deleting $NAME in $ZONE in ${shutdown_timeout} seconds ..."
