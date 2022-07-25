@@ -73,6 +73,10 @@ inputs:
     description: "Whether the GitHub actions have already been installed at `/actions-runner`."
     default: false
     required: true
+  name_prefix:
+    description: "A name prefix to identify the virtual machine."
+    default: "default"
+    required: false
 outputs:
   label:
     description: >-
@@ -102,4 +106,5 @@ runs:
         --preemptible=${{ inputs.preemptible }}
         --ephemeral=${{ inputs.ephemeral }}
         --actions_preinstalled=${{ inputs.actions_preinstalled }}
+        --name_prefix=${{ inputs.name_prefix }}
       shell: bash
