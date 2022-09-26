@@ -190,17 +190,10 @@ function start_vm {
   if $install_docker ; then
     echo "✅ Startup script will install and configure Docker daemon"
     startup_script="#!/bin/bash
-    docker_package=docker.io
-    is_package_installed=\$(dpkg -S \${docker_package} &> /dev/null)
-    if ! \${is_package_installed}
-    then
-        echo 'Docker was not found. Installing...'
-        apt-get update
-        apt-get install -y \${docker_package}
-        echo '✅ Docker successfully installed'
-    else
-        echo '✅ Docker is already installed'
-    fi
+    echo 'Installing Docker daemon...'
+    apt-get update
+    apt-get install -y docker.io
+    echo '✅ Docker successfully installed'
 
     echo 'Configuring Docker daemon...'
 
@@ -237,13 +230,13 @@ function start_vm {
     if [[ $GH_READY == 1 ]]; then
       break
     fi
-    echo "${VM_ID} not ready yet, waiting 5 secs ..."
-    sleep 5
+    echo "${VM_ID} not ready yet, waiting 10 secs ..."
+    sleep 10
   done
   if [[ $GH_READY == 1 ]]; then
     echo "✅ ${VM_ID} ready ..."
   else
-    echo "Waited 2 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
+    echo "Waited 4 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
     gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}
     exit 1
   fi
