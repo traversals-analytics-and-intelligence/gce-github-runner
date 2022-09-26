@@ -274,7 +274,6 @@ safety_on
 case "$command" in
   start)
     start_vm
-    install_docker
     ;;
   stop)
     stop_vm
