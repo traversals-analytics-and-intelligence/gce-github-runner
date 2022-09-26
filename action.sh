@@ -187,6 +187,16 @@ function start_vm {
     $startup_script"
   fi
 
+  if $install_docker ; then
+    echo "✅ Startup script will install and configure Docker daemon"
+    _docker_script=$(install_docker)
+    startup_script="#!/bin/bash
+    $_docker_script
+    $startup_script"
+  else
+    echo "✅ Startup script won't install Docker daemon"
+  fi
+
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
     ${disk_size_flag} \
@@ -219,40 +229,31 @@ function start_vm {
   fi
 }
 
-function is_package_installed {
-  dpkg -S "$1" &> /dev/null
-}
-
 function install_docker {
   # NOTE: this function runs on the GCE VM
-  if $install_docker ; then
-    echo "✅ Startup script will install and configure Docker daemon"
-    docker_package=moby
-    if ! is_package_installed $docker_package; then
-        echo "Docker ($docker_package) was not found. Installing..."
-        apt-get remove -y moby-engine moby-cli
-        apt-get update
-        apt-get install -y moby-engine moby-cli
-        apt-get install --no-install-recommends -y moby-buildx
-        apt-get install -y moby-compose
-        echo "✅ Docker ($docker_package) successfully installed"
-    else
-        echo "✅ Docker ($docker_package) is already installed"
-    fi
+  echo "
+docker_package=docker.io
+is_package_installed=\$(dpkg -S \$docker_package &> /dev/null)
+if ! \$is_package_installed
+then
+    echo \"Docker (\$docker_package) was not found. Installing...\"
+    apt-get update
+    apt-get install -y \$docker_package
+    echo \"✅ Docker (\$docker_package) successfully installed\"
+else
+    echo \"✅ Docker (\$docker_package) is already installed\"
+fi
 
-    echo "Configuring Docker daemon..."
+echo \"Configuring Docker daemon...\"
 
-    # Enable docker.service
-    systemctl is-active --quiet docker.service || systemctl start docker.service
-    systemctl is-enabled --quiet docker.service || systemctl enable docker.service
+# Enable docker.service
+systemctl is-active --quiet docker.service || systemctl start docker.service
+systemctl is-enabled --quiet docker.service || systemctl enable docker.service
 
-    # Docker daemon takes time to come up after installing
-    sleep 10
-    docker info
-    echo "✅ Docker daemon successfully configured"
-  else
-    echo "✅ Startup script won't install Docker daemon"
-  fi
+# Docker daemon takes time to come up after installing
+sleep 10
+docker info
+echo \"✅ Docker daemon successfully configured\""
 }
 
 function stop_vm {
