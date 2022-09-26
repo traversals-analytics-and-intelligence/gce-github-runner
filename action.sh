@@ -34,6 +34,7 @@ preemptible=
 ephemeral=
 actions_preinstalled=
 name_prefix=
+install_docker=
 
 OPTLIND=1
 while getopts_long :h opt \
@@ -55,6 +56,7 @@ while getopts_long :h opt \
   ephemeral required_argument \
   actions_preinstalled required_argument \
   name_prefix optional_argument \
+  install_docker optional_argument \
   help no_argument "" "$@"
 do
   case "$opt" in
@@ -111,6 +113,9 @@ do
       ;;
     name_prefix)
       name_prefix=${OPTLARG-$name_prefix}
+      ;;
+    install_docker)
+      install_docker=$OPTLARG
       ;;
     h|help)
       usage
@@ -214,6 +219,42 @@ function start_vm {
   fi
 }
 
+function is_package_installed {
+  dpkg -S "$1" &> /dev/null
+}
+
+function install_docker {
+  # NOTE: this function runs on the GCE VM
+  if $install_docker ; then
+    echo "✅ Startup script will install and configure Docker daemon"
+    docker_package=moby
+    if ! is_package_installed $docker_package; then
+        echo "Docker ($docker_package) was not found. Installing..."
+        apt-get remove -y moby-engine moby-cli
+        apt-get update
+        apt-get install -y moby-engine moby-cli
+        apt-get install --no-install-recommends -y moby-buildx
+        apt-get install -y moby-compose
+        echo "✅ Docker ($docker_package) successfully installed"
+    else
+        echo "✅ Docker ($docker_package) is already installed"
+    fi
+
+    echo "Configuring Docker daemon..."
+
+    # Enable docker.service
+    systemctl is-active --quiet docker.service || systemctl start docker.service
+    systemctl is-enabled --quiet docker.service || systemctl enable docker.service
+
+    # Docker daemon takes time to come up after installing
+    sleep 10
+    docker info
+    echo "✅ Docker daemon successfully configured"
+  else
+    echo "✅ Startup script won't install Docker daemon"
+  fi
+}
+
 function stop_vm {
   # NOTE: this function runs on the GCE VM
   echo "Stopping GCE VM ..."
@@ -239,6 +280,7 @@ safety_on
 case "$command" in
   start)
     start_vm
+    install_docker
     ;;
   stop)
     stop_vm

@@ -77,6 +77,10 @@ inputs:
     description: "A name prefix to identify the virtual machine."
     default: "default"
     required: false
+  install_docker:
+    description: Whether or not to install/configure the Docker daemon
+    default: false
+    required: false
 outputs:
   label:
     description: >-
@@ -107,4 +111,5 @@ runs:
         --ephemeral=${{ inputs.ephemeral }}
         --actions_preinstalled=${{ inputs.actions_preinstalled }}
         --name_prefix=${{ inputs.name_prefix }}
+        --install_docker=${{ inputs.install_docker }}
       shell: bash
