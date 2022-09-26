@@ -191,18 +191,18 @@ function start_vm {
     echo "✅ Startup script will install and configure Docker daemon"
     startup_script="#!/bin/bash
     docker_package=docker.io
-    is_package_installed=\$(dpkg -S \$docker_package &> /dev/null)
-    if ! \$is_package_installed
+    is_package_installed=\$(dpkg -S \${docker_package} &> /dev/null)
+    if ! \${is_package_installed}
     then
-        echo \"Docker (\$docker_package) was not found. Installing...\"
+        echo 'Docker was not found. Installing...'
         apt-get update
-        apt-get install -y \$docker_package
-        echo \"✅ Docker (\$docker_package) successfully installed\"
+        apt-get install -y \${docker_package}
+        echo '✅ Docker successfully installed'
     else
-        echo \"✅ Docker (\$docker_package) is already installed\"
+        echo '✅ Docker is already installed'
     fi
 
-    echo \"Configuring Docker daemon...\"
+    echo 'Configuring Docker daemon...'
 
     # Enable docker.service
     systemctl is-active --quiet docker.service || systemctl start docker.service
@@ -211,7 +211,7 @@ function start_vm {
     # Docker daemon takes time to come up after installing
     sleep 10
     docker info
-    echo \"✅ Docker daemon successfully configured\"
+    echo '✅ Docker daemon successfully configured'
     $startup_script"
   else
     echo "✅ Startup script won't install Docker daemon"
