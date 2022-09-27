@@ -161,35 +161,23 @@ function start_vm {
 
   echo "The new GCE VM will be ${VM_ID}"
 
+  startup_script="#!/bin/bash"
+  runner_user="runner"
+  runner_dir="/home/${runner_user}"
+
+  # Create dedicated user
+  echo "✅ Startup script will create a dedicated user for runner"
   startup_script="
-    gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=0 && \\
-    RUNNER_ALLOW_RUNASROOT=1 ./config.sh --url https://github.com/${GITHUB_REPOSITORY} --token ${RUNNER_TOKEN} --labels ${VM_ID} --unattended ${ephemeral_flag} --disableupdate && \\
-    ./svc.sh install && \\
-    ./svc.sh start && \\
-    gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=1
-    # 3 days represents the max workflow runtime. This will shutdown the instance if everything else fails.
-    echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
-    "
+  ${startup_script}
+  useradd -s /bin/bash -m -d ${runner_dir} -G sudo ${runner_user}
+  echo '[username] ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+  "
 
-  if $actions_preinstalled ; then
-    echo "✅ Startup script won't install GitHub Actions (pre-installed)"
-    startup_script="#!/bin/bash
-    cd /actions-runner
-    $startup_script"
-  else
-    echo "✅ Startup script will install GitHub Actions"
-    startup_script="#!/bin/bash
-    mkdir /actions-runner
-    cd /actions-runner
-    curl -o actions-runner-linux-x64-${runner_ver}.tar.gz -L https://github.com/actions/runner/releases/download/v${runner_ver}/actions-runner-linux-x64-${runner_ver}.tar.gz
-    tar xzf ./actions-runner-linux-x64-${runner_ver}.tar.gz
-    ./bin/installdependencies.sh && \\
-    $startup_script"
-  fi
-
+  # Install docker if desired
   if $install_docker ; then
     echo "✅ Startup script will install and configure Docker daemon"
-    startup_script="#!/bin/bash
+    startup_script="
+    ${startup_script}
     echo 'Installing Docker daemon...'
     apt-get update
     apt-get install -y docker.io
@@ -205,10 +193,43 @@ function start_vm {
     sleep 10
     docker info
     echo '✅ Docker daemon successfully configured'
-    $startup_script"
+    "
   else
     echo "✅ Startup script won't install Docker daemon"
   fi
+
+  # Install GitHub actions if desired
+  if $actions_preinstalled ; then
+      echo "✅ Startup script won't install GitHub Actions (pre-installed)"
+      startup_script="
+      ${startup_script}
+      cd ${runner_dir}/actions-runner
+      "
+  else
+    echo "✅ Startup script will install GitHub Actions"
+    startup_script="
+    ${startup_script}
+    mkdir ${runner_dir}/actions-runner
+    cd ${runner_dir}/actions-runner
+    curl -o actions-runner-linux-x64-${runner_ver}.tar.gz -L https://github.com/actions/runner/releases/download/v${runner_ver}/actions-runner-linux-x64-${runner_ver}.tar.gz
+    tar xzf ./actions-runner-linux-x64-${runner_ver}.tar.gz
+    ./bin/installdependencies.sh
+    "
+  fi
+
+  # Run service
+  startup_script="
+    ${startup_script}
+    su - ${runner_user}
+    cd ${runner_dir}/actions-runner
+    gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=0 && \\
+    ./config.sh --url https://github.com/${GITHUB_REPOSITORY} --token ${RUNNER_TOKEN} --labels ${VM_ID} --unattended ${ephemeral_flag} --disableupdate && \\
+    sudo ./svc.sh install && \\
+    sudo ./svc.sh start && \\
+    gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=1
+    # 3 days represents the max workflow runtime. This will shutdown the instance if everything else fails.
+    echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
+    "
 
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
