@@ -220,12 +220,11 @@ function start_vm {
   # Run service
   startup_script="
     ${startup_script}
-    su - ${runner_user}
-    cd ${runner_dir}/actions-runner
     gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=0 && \\
     ./config.sh --url https://github.com/${GITHUB_REPOSITORY} --token ${RUNNER_TOKEN} --labels ${VM_ID} --unattended ${ephemeral_flag} --disableupdate && \\
-    sudo ./svc.sh install && \\
+    sudo ./svc.sh install ${runner_user} && \\
     sudo ./svc.sh start && \\
+    sudo rm -rf _diag _work && \\
     gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=1
     # 3 days represents the max workflow runtime. This will shutdown the instance if everything else fails.
     echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
