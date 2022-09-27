@@ -170,7 +170,7 @@ function start_vm {
   startup_script="
   ${startup_script}
   useradd -s /bin/bash -m -d ${runner_dir} -G sudo ${runner_user}
-  echo '[username] ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+  echo '${runner_user} ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
   "
 
   # Install docker if desired
@@ -190,7 +190,7 @@ function start_vm {
     systemctl is-enabled --quiet docker.service || systemctl enable docker.service
 
     # Docker daemon takes time to come up after installing
-    sleep 10
+    sleep 5
     docker info
     echo '✅ Docker daemon successfully configured'
     "
