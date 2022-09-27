@@ -198,7 +198,7 @@ function start_vm {
   echo '${runner_user} ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
   usermod -aG docker ${runner_user}
   systemctl restart docker.service
-  echo '✅ User successfully created and configure'
+  echo '✅ User successfully created and configured'
   "
 
   # Install GitHub actions if desired
