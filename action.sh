@@ -165,9 +165,18 @@ function start_vm {
   runner_user="runner"
   runner_dir="/home/${runner_user}"
 
+  # Create dedicated user
+  echo "✅ Startup script will create a dedicated user for runner"
+  startup_script="
+    ${startup_script}
+    useradd -s /bin/bash -m -d ${runner_dir} -G sudo ${runner_user}
+    echo '${runner_user} ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+    echo '✅ User successfully created'
+    "
+
   # Install docker if desired
   if $install_docker ; then
-    echo "✅ Startup script will install and configure Docker daemon"
+    echo "✅ Startup script will install and configure Docker"
     startup_script="
     ${startup_script}
     echo 'Installing Docker daemon...'
@@ -184,22 +193,15 @@ function start_vm {
     # Docker daemon takes time to come up after installing
     sleep 5
     docker info
-    echo '✅ Docker daemon successfully configured'
+    echo '✅ Docker successfully installed and configured'
+
+    usermod -aG docker ${runner_user}
+    systemctl restart docker.service
+    echo '✅ User successfully added to Docker group'
     "
   else
     echo "✅ Startup script won't install Docker daemon"
   fi
-
-  # Create dedicated user
-  echo "✅ Startup script will create a dedicated user for runner"
-  startup_script="
-  ${startup_script}
-  useradd -s /bin/bash -m -d ${runner_dir} -G sudo ${runner_user}
-  echo '${runner_user} ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-  usermod -aG docker ${runner_user}
-  systemctl restart docker.service
-  echo '✅ User successfully created and configured'
-  "
 
   # Install GitHub actions if desired
   if $actions_preinstalled ; then
