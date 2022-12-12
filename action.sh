@@ -286,7 +286,8 @@ function stop_vm {
   NAME=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/name -H 'Metadata-Flavor: Google')
   ZONE=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/zone -H 'Metadata-Flavor: Google')
   echo "✅ Self deleting $NAME in $ZONE in ${shutdown_timeout} seconds ..."
-  echo "sleep ${shutdown_timeout}; gcloud --quiet compute instances delete $NAME --zone=$ZONE --project=${project_id}" | env at now
+  sleep ${shutdown_timeout}
+  gcloud --quiet compute instances delete $NAME --zone=$ZONE --project=${project_id}
 }
 
 safety_on
