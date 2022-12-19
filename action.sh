@@ -35,6 +35,7 @@ ephemeral=
 actions_preinstalled=
 name_prefix=
 install_docker=
+additional_packages="at"
 
 OPTLIND=1
 while getopts_long :h opt \
@@ -165,6 +166,15 @@ function start_vm {
   runner_user="runner"
   runner_dir="/home/${runner_user}"
 
+  # Install mandatory packages
+  echo "✅ Startup script will install all necessary packages"
+  startup_script="
+    ${startup_script}
+    apt-get update
+    apt-get install -y ${additional_packages}
+    echo '✅ Packages successfully installed'
+  "
+
   # Create dedicated user
   echo "✅ Startup script will create a dedicated user for runner"
   startup_script="
@@ -286,8 +296,7 @@ function stop_vm {
   NAME=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/name -H 'Metadata-Flavor: Google')
   ZONE=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/zone -H 'Metadata-Flavor: Google')
   echo "✅ Self deleting $NAME in $ZONE in ${shutdown_timeout} seconds ..."
-  sleep ${shutdown_timeout}
-  gcloud --quiet compute instances delete $NAME --zone=$ZONE --project=${project_id}
+  echo "sleep ${shutdown_timeout}; gcloud --quiet compute instances delete $NAME --zone=$ZONE --project=${project_id}" | env at now
 }
 
 safety_on
