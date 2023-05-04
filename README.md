@@ -15,20 +15,20 @@ jobs:
       label: ${{ steps.create-runner.outputs.label }}
     steps:
       - id: create-runner
-        uses: related-sciences/gce-github-runner@v0.4
+        uses: traversals-analytics-and-intelligence/gce-github-runner@main
         with:
           token: ${{ secrets.GH_SA_TOKEN }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           image_project: ubuntu-os-cloud
-          image_family: ubuntu-2004-lts
+          image_family: ubuntu-2204-lts
 
   test:
     needs: create-runner
     runs-on: ${{ needs.create-runner.outputs.label }}
     steps:
       - run: echo "This runs on the GCE VM"
-      - uses: related-sciences/gce-github-runner@v0.4
+      - uses: traversals-analytics-and-intelligence/gce-github-runner@main
         with:
           command: stop
         if: always()
