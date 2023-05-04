@@ -255,10 +255,10 @@ function start_vm {
   fi
 
   # Install GPU drivers if accelerator option is set
-  if [[ -z ${accelerator} ]]; then
+  if [[ -n ${accelerator} ]]; then
     required_image_project="deeplearning-platform-release"
 
-    if [ -z ${image_project} ] && [ ${image_project} = ${required_image_project} ]; then
+    if [[ -n ${image_project} ]] && [ ${image_project} = ${required_image_project} ]; then
       echo "✅ Startup script will install GPU drivers"
       runner_metadata="install-nvidia-driver=True"
     else
@@ -289,10 +289,6 @@ function start_vm {
   else
     runner_metadata=startup_script=${startup_script}
   fi
-
-  echo ${runner_metadata}
-
-  echo "${runner_metadata}"
 
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
