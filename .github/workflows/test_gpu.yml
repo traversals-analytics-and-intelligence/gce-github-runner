@@ -1,9 +1,6 @@
 name: Test
 
-on:
-  push:
-    branches:
-      - feature/gpu
+on: [workflow_dispatch]
 
 jobs:
   create-runner:

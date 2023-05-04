@@ -179,6 +179,8 @@ function start_vm {
   runner_user="runner"
   runner_dir="/home/${runner_user}"
 
+  runner_metadata=
+
   # Install mandatory packages
   echo "✅ Startup script will install all necessary packages"
   startup_script="
@@ -258,10 +260,7 @@ function start_vm {
 
     if [ -z ${image_project} ] && [ ${image_project} = ${required_image_project} ]; then
       echo "✅ Startup script will install GPU drivers"
-      startup_script="
-      ${startup_script}
-      gcloud compute instances add-metadata ${VM_ID} --metadata=install-nvidia-driver=True
-      "
+      runner_metadata=install-nvidia-driver=True
     else
       echo "❌ Accelerators should only be used with public images from project ${required_image_project}. Terminating..."
       exit 1
@@ -285,6 +284,12 @@ function start_vm {
     echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
     "
 
+  if [[ -z ${runner_metadata} ]]; then
+    runner_metadata=${runner_metadata},startup_script="${startup_script}"
+  else
+    runner_metadata=startup_script="${startup_script}"
+  fi
+
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
     ${disk_size_flag} \
@@ -297,7 +302,7 @@ function start_vm {
     ${preemptible_flag} \
     ${accelerator} \
     --labels=gh_ready=0 \
-    --metadata=startup-script="$startup_script" \
+    --metadata="${runner_metadata}" \
     && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
