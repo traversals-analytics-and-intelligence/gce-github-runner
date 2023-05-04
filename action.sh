@@ -205,28 +205,33 @@ function start_vm {
       echo "✅ Startup script will install and configure Docker"
       docker_package=docker.io
 
-      startup_script="
-      ${startup_script}
-      echo 'Installing Docker daemon...'
-      apt-get update
-      apt-get install -y ${docker_package}
-      echo '✅ Docker successfully installed'
+      if [ -x "$(command -v docker)" ]; then
+          echo "Docker is already installed. Skipping installation..."
+      else
+          echo "Docker is not installed. Issuing installation..."
+          startup_script="
+          ${startup_script}
+          echo 'Installing Docker daemon...'
+          apt-get update
+          apt-get install -y ${docker_package}
+          echo '✅ Docker successfully installed'
 
-      echo 'Configuring Docker daemon...'
+          echo 'Configuring Docker daemon...'
 
-      # Enable docker.service
-      systemctl is-active --quiet docker.service || systemctl start docker.service
-      systemctl is-enabled --quiet docker.service || systemctl enable docker.service
+          # Enable docker.service
+          systemctl is-active --quiet docker.service || systemctl start docker.service
+          systemctl is-enabled --quiet docker.service || systemctl enable docker.service
 
-      # Docker daemon takes time to come up after installing
-      sleep 5
-      docker info
-      echo '✅ Docker successfully installed and configured'
+          # Docker daemon takes time to come up after installing
+          sleep 5
+          docker info
+          echo '✅ Docker successfully installed and configured'
 
-      usermod -aG docker ${runner_user}
-      systemctl restart docker.service
-      echo '✅ User successfully added to Docker group'
-      "
+          usermod -aG docker ${runner_user}
+          systemctl restart docker.service
+          echo '✅ User successfully added to Docker group'
+          "
+      fi
     else
       echo "❌ For Docker, please use an image based on Debian. Terminating..."
       exit 1
@@ -285,9 +290,9 @@ function start_vm {
     "
 
   if [[ -n ${runner_metadata} ]]; then
-    runner_metadata=${runner_metadata},startup_script="${startup_script}"
+    runner_metadata=${runner_metadata},startup-script="${startup_script}"
   else
-    runner_metadata=startup_script=${startup_script}
+    runner_metadata=startup-script="${startup_script}"
   fi
 
   gcloud compute instances create ${VM_ID} \
@@ -306,7 +311,7 @@ function start_vm {
     && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
-  while (( i++ < 50 )); do
+  while (( i++ < 42 )); do
     GH_READY=$(gcloud compute instances describe ${VM_ID} --zone=${machine_zone} --format='json(labels)' | jq -r .labels.gh_ready)
     if [[ $GH_READY == 1 ]]; then
       break
@@ -317,7 +322,7 @@ function start_vm {
   if [[ $GH_READY == 1 ]]; then
     echo "✅ ${VM_ID} ready ..."
   else
-    echo "Waited 5 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
+    echo "Waited 7 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
     gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}
     exit 1
   fi
