@@ -179,7 +179,7 @@ function start_vm {
   runner_user="runner"
   runner_dir="/home/${runner_user}"
 
-  runner_metadata=
+  runner_metadata=""
 
   # Install mandatory packages
   echo "✅ Startup script will install all necessary packages"
@@ -260,7 +260,7 @@ function start_vm {
 
     if [ -z ${image_project} ] && [ ${image_project} = ${required_image_project} ]; then
       echo "✅ Startup script will install GPU drivers"
-      runner_metadata=install-nvidia-driver=True
+      runner_metadata="install-nvidia-driver=True"
     else
       echo "❌ Accelerators should only be used with public images from project ${required_image_project}. Terminating..."
       exit 1
@@ -284,7 +284,15 @@ function start_vm {
     echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
     "
 
-  # runner_metadata=${runner_metadata},startup_script=${startup_script}
+  if [[ ${runner_metadata} -ge 0 ]]; then
+    runner_metadata=${runner_metadata},startup_script="${startup_script}"
+  else
+    runner_metadata=startup_script=${startup_script}
+  fi
+
+  echo ${runner_metadata}
+
+  echo "${runner_metadata}"
 
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
@@ -298,11 +306,11 @@ function start_vm {
     ${preemptible_flag} \
     ${accelerator} \
     --labels=gh_ready=0 \
-    --metadata=install-nvidia-drivers=True,startup_script="${startup_script}" \
+    --metadata="${runner_metadata}" \
     && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
-  while (( i++ < 30 )); do
+  while (( i++ < 50 )); do
     GH_READY=$(gcloud compute instances describe ${VM_ID} --zone=${machine_zone} --format='json(labels)' | jq -r .labels.gh_ready)
     if [[ $GH_READY == 1 ]]; then
       break
