@@ -35,6 +35,8 @@ ephemeral=
 actions_preinstalled=
 name_prefix=
 install_docker=
+accelerator_type=
+accelerator_count=
 additional_packages="at"
 
 OPTLIND=1
@@ -58,6 +60,8 @@ while getopts_long :h opt \
   actions_preinstalled required_argument \
   name_prefix optional_argument \
   install_docker optional_argument \
+  accelerator_type optional_argument \
+  accelerator_count optional_argument \
   help no_argument "" "$@"
 do
   case "$opt" in
@@ -118,6 +122,12 @@ do
     install_docker)
       install_docker=$OPTLARG
       ;;
+    accelerator_type)
+      accelerator_type=$OPTLARG
+      ;;
+    accelerator_count)
+      accelerator_count=$OPTLARG
+      ;;
     h|help)
       usage
       exit 0
@@ -159,6 +169,9 @@ function start_vm {
   disk_size_flag=$([[ -z "${disk_size}" ]] || echo "--boot-disk-size=${disk_size}")
   preemptible_flag=$([[ "${preemptible}" == "true" ]] && echo "--preemptible" || echo "")
   ephemeral_flag=$([[ "${ephemeral}" == "true" ]] && echo "--ephemeral" || echo "")
+  accelerator=$([[ -n "${accelerator_type}"  ]] && \
+    echo "--accelerator type=${accelerator_type},count=${accelerator_count} --maintenance-policy=TERMINATE" || \
+    echo "")
 
   echo "The new GCE VM will be ${VM_ID}"
 
@@ -186,29 +199,36 @@ function start_vm {
 
   # Install docker if desired
   if $install_docker ; then
-    echo "✅ Startup script will install and configure Docker"
-    startup_script="
-    ${startup_script}
-    echo 'Installing Docker daemon...'
-    apt-get update
-    apt-get install -y docker.io
-    echo '✅ Docker successfully installed'
+    if [[ "$(grep -Ei 'debian|buntu|mint' /etc/*release)" ]]; then
+      echo "✅ Startup script will install and configure Docker"
+      docker_package=docker.io
 
-    echo 'Configuring Docker daemon...'
+      startup_script="
+      ${startup_script}
+      echo 'Installing Docker daemon...'
+      apt-get update
+      apt-get install -y ${docker_package}
+      echo '✅ Docker successfully installed'
 
-    # Enable docker.service
-    systemctl is-active --quiet docker.service || systemctl start docker.service
-    systemctl is-enabled --quiet docker.service || systemctl enable docker.service
+      echo 'Configuring Docker daemon...'
 
-    # Docker daemon takes time to come up after installing
-    sleep 5
-    docker info
-    echo '✅ Docker successfully installed and configured'
+      # Enable docker.service
+      systemctl is-active --quiet docker.service || systemctl start docker.service
+      systemctl is-enabled --quiet docker.service || systemctl enable docker.service
 
-    usermod -aG docker ${runner_user}
-    systemctl restart docker.service
-    echo '✅ User successfully added to Docker group'
-    "
+      # Docker daemon takes time to come up after installing
+      sleep 5
+      docker info
+      echo '✅ Docker successfully installed and configured'
+
+      usermod -aG docker ${runner_user}
+      systemctl restart docker.service
+      echo '✅ User successfully added to Docker group'
+      "
+    else
+      echo "❌ For Docker, please use an image based on Debian. Terminating..."
+      exit 1
+    fi
   else
     echo "✅ Startup script won't install Docker daemon"
   fi
@@ -230,6 +250,25 @@ function start_vm {
     tar xzf ./actions-runner-linux-x64-${runner_ver}.tar.gz
     ./bin/installdependencies.sh
     "
+  fi
+
+  # Install GPU drivers if accelerator option is set
+  if [[ -z ${accelerator} ]]; then
+    required_image_project="deeplearning-platform-release"
+
+    if [ -z ${image_project} ] && [ ${image_project} = ${required_image_project} ]; then
+      echo "✅ Startup script will install GPU drivers"
+      startup_script="
+      ${startup_script}
+      gcloud compute instances add-metadata ${VM_ID} --metadata=install-nvidia-driver=True
+      "
+    else
+      echo "❌ Accelerators should only be used with public images from project ${required_image_project}. Terminating..."
+      exit 1
+    fi
+
+  else
+    echo "✅ Startup script won't install GPU drivers as there are no accelerators configured"
   fi
 
   # Run service
@@ -256,12 +295,13 @@ function start_vm {
     ${image_flag} \
     ${image_family_flag} \
     ${preemptible_flag} \
+    ${accelerator} \
     --labels=gh_ready=0 \
     --metadata=startup-script="$startup_script" \
     && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
-  while (( i++ < 24 )); do
+  while (( i++ < 30 )); do
     GH_READY=$(gcloud compute instances describe ${VM_ID} --zone=${machine_zone} --format='json(labels)' | jq -r .labels.gh_ready)
     if [[ $GH_READY == 1 ]]; then
       break
@@ -272,7 +312,7 @@ function start_vm {
   if [[ $GH_READY == 1 ]]; then
     echo "✅ ${VM_ID} ready ..."
   else
-    echo "Waited 4 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
+    echo "Waited 5 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
     gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}
     exit 1
   fi
@@ -281,10 +321,6 @@ function start_vm {
 function stop_vm {
   # NOTE: this function runs on the GCE VM
   echo "Stopping GCE VM ..."
-  # NOTE: it would be nice to gracefully shut down the runner, but we actually don't need
-  #       to do that. VM shutdown will disconnect the runner, and GH will unregister it
-  #       in 30 days
-  # TODO: RUNNER_ALLOW_RUNASROOT=1 /actions-runner/config.sh remove --token $TOKEN
   
   if [[ -z "${service_account_key}" ]] || [[ -z "${project_id}" ]]; then
     echo "Won't authenticate gcloud. If you wish to authenticate gcloud provide both service_account_key and project_id."
