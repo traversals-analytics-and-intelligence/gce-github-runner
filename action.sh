@@ -284,11 +284,7 @@ function start_vm {
     echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
     "
 
-  if [[ -n ${runner_metadata} ]]; then
-    runner_metadata=${runner_metadata},startup_script="${startup_script}"
-  else
-    runner_metadata=startup_script="${startup_script}"
-  fi
+  runner_metadata="${runner_metadata},startup_script=${startup_script}"
 
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
@@ -302,7 +298,7 @@ function start_vm {
     ${preemptible_flag} \
     ${accelerator} \
     --labels=gh_ready=0 \
-    --metadata=${runner_metadata} \
+    --metadata="${runner_metadata}" \
     && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
