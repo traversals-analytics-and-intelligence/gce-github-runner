@@ -284,7 +284,7 @@ function start_vm {
     echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
     "
 
-  if [[ ${runner_metadata} -ge 0 ]]; then
+  if [[ -n ${runner_metadata} ]]; then
     runner_metadata=${runner_metadata},startup_script="${startup_script}"
   else
     runner_metadata=startup_script=${startup_script}
