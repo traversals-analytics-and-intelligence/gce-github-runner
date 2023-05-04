@@ -203,35 +203,37 @@ function start_vm {
   if $install_docker ; then
     if [[ "$(grep -Ei 'debian|buntu|mint' /etc/*release)" ]]; then
       echo "✅ Startup script will install and configure Docker"
-      docker_package=docker.io
 
       if [ -x "$(command -v docker)" ]; then
-          echo "Docker is already installed. Skipping installation..."
+        echo "Docker is already installed. Skipping installation..."
       else
-          echo "Docker is not installed. Issuing installation..."
-          startup_script="
-          ${startup_script}
-          echo 'Installing Docker daemon...'
-          apt-get update
-          apt-get install -y ${docker_package}
-          echo '✅ Docker successfully installed'
+        docker_package=docker.io
+        echo "Docker is not installed. Issuing installation..."
+        startup_script="
+        ${startup_script}
+        echo 'Installing Docker daemon...'
+        apt-get update
+        apt-get install -y ${docker_package}
+        echo '✅ Docker successfully installed'
 
-          echo 'Configuring Docker daemon...'
+        # Enable docker.service
+        systemctl is-active --quiet docker.service || systemctl start docker.service
+        systemctl is-enabled --quiet docker.service || systemctl enable docker.service
 
-          # Enable docker.service
-          systemctl is-active --quiet docker.service || systemctl start docker.service
-          systemctl is-enabled --quiet docker.service || systemctl enable docker.service
-
-          # Docker daemon takes time to come up after installing
-          sleep 5
-          docker info
-          echo '✅ Docker successfully installed and configured'
-
-          usermod -aG docker ${runner_user}
-          systemctl restart docker.service
-          echo '✅ User successfully added to Docker group'
-          "
+        # Docker daemon takes time to come up after installing
+        sleep 5
+        docker info
+        echo '✅ Docker successfully installed and configured'
+        "
       fi
+
+      echo "Configuring runner user for Docker daemon..."
+      startup_script="
+      ${startup_script}
+      usermod -aG docker ${runner_user}
+      systemctl restart docker.service
+      echo '✅ User successfully added to Docker group'
+      "
     else
       echo "❌ For Docker, please use an image based on Debian. Terminating..."
       exit 1
@@ -242,11 +244,11 @@ function start_vm {
 
   # Install GitHub actions if desired
   if $actions_preinstalled ; then
-      echo "✅ Startup script won't install GitHub Actions (pre-installed)"
-      startup_script="
-      ${startup_script}
-      cd ${runner_dir}/actions-runner
-      "
+    echo "✅ Startup script won't install GitHub Actions (pre-installed)"
+    startup_script="
+    ${startup_script}
+    cd ${runner_dir}/actions-runner
+    "
   else
     echo "✅ Startup script will install GitHub Actions"
     startup_script="
