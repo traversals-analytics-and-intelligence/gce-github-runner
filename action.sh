@@ -384,6 +384,13 @@ function start_vm {
     runner_metadata=startup-script="${startup_script}"
   fi
 
+  # print accumulated variables (only for temporary testing)
+  echo "ℹ️ Startup script:"
+  echo "${startup_script}"
+  echo
+  echo "ℹ️ Runner metadata:"
+  echo "${runner_metadata}"
+
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
     ${disk_size_flag} \
