@@ -201,19 +201,42 @@ function start_vm {
 
   # Install docker if desired
   if $install_docker ; then
-    if [[ "$(grep -Ei 'debian|buntu|mint' /etc/*release)" ]]; then
-      echo "✅ Startup script will install and configure Docker"
+    echo "✅ Startup script will install and configure Docker"
 
-      if [ -x "$(command -v docker)" ]; then
-        echo "Docker is already installed. Skipping installation..."
+    startup_script="
+    ${startup_script}
+    if [[ "'$(grep -Ei "debian|ubuntu" /etc/*release)'" ]]; then
+      if [ -x "'$(command -v docker)'" ]; then
+        echo '✅ Docker is already installed. Skipping installation...'
       else
-        docker_package=docker.io
-        echo "Docker is not installed. Issuing installation..."
-        startup_script="
-        ${startup_script}
-        echo 'Installing Docker daemon...'
+        apt-get install -y ca-certificates curl gnupg
+
+        docker_url=
+        docker_url_gpg=
+
+        if [[ "'$(grep -Ei "ID=debian" /etc/*release)'" ]]; then
+          # Debian OS
+          docker_url=https://download.docker.com/linux/debian
+          docker_url_gpg=https://download.docker.com/linux/debian/gpg
+        elif [[ "'$(grep -Ei "ID=ubuntu" /etc/*release)'" ]]; then
+          # Ubuntu OS
+          docker_url=https://download.docker.com/linux/ubuntu
+          docker_url_gpg=https://download.docker.com/linux/ubuntu/gpg
+        fi
+
+        docker_packages='docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin'
+
+        echo 'Docker is not installed. Installing Docker daemon...'
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL "'${docker_url_gpg}'" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+
+        echo 'deb [arch="'$(dpkg --print-architecture)'" signed-by=/etc/apt/keyrings/docker.gpg] "'${docker_url}'" \
+          "'$(. /etc/os-release && echo $VERSION_CODENAME)'" stable' | \
+          tee /etc/apt/sources.list.d/docker.list > /dev/null
+
         apt-get update
-        apt-get install -y ${docker_package}
+        apt-get install -y "'${docker_packages}'"
         echo '✅ Docker successfully installed'
 
         # Enable docker.service
@@ -224,20 +247,17 @@ function start_vm {
         sleep 5
         docker info
         echo '✅ Docker successfully installed and configured'
-        "
       fi
 
-      echo "Configuring runner user for Docker daemon..."
-      startup_script="
-      ${startup_script}
+      echo 'Configuring runner user for Docker daemon...'
       usermod -aG docker ${runner_user}
       systemctl restart docker.service
       echo '✅ User successfully added to Docker group'
-      "
     else
-      echo "❌ For Docker, please use an image based on Debian. Terminating..."
+      echo '❌ For Docker, please use an image based on Debian. Terminating...'
       exit 1
     fi
+    "
   else
     echo "✅ Startup script won't install Docker daemon"
   fi
@@ -313,7 +333,7 @@ function start_vm {
     && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
-  while (( i++ < 42 )); do
+  while (( i++ < 60 )); do
     GH_READY=$(gcloud compute instances describe ${VM_ID} --zone=${machine_zone} --format='json(labels)' | jq -r .labels.gh_ready)
     if [[ $GH_READY == 1 ]]; then
       break
@@ -324,7 +344,7 @@ function start_vm {
   if [[ $GH_READY == 1 ]]; then
     echo "✅ ${VM_ID} ready ..."
   else
-    echo "Waited 7 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
+    echo "Waited 10 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
     gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}
     exit 1
   fi
