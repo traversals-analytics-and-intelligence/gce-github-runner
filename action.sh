@@ -228,15 +228,15 @@ function start_vm {
 
         echo 'Docker is not installed. Installing Docker daemon...'
         install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL "'${docker_url_gpg}'" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        curl -fsSL \${docker_url_gpg} | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         chmod a+r /etc/apt/keyrings/docker.gpg
 
-        echo 'deb [arch="'$(dpkg --print-architecture)'" signed-by=/etc/apt/keyrings/docker.gpg] "'${docker_url}'" \
+        echo 'deb [arch="'$(dpkg --print-architecture)'" signed-by=/etc/apt/keyrings/docker.gpg] \${docker_url} \
           "'$(. /etc/os-release && echo $VERSION_CODENAME)'" stable' | \
           tee /etc/apt/sources.list.d/docker.list > /dev/null
 
         apt-get update
-        apt-get install -y "'${docker_packages}'"
+        apt-get install -y \${docker_packages}
         echo '✅ Docker successfully installed'
 
         # Enable docker.service
@@ -298,7 +298,7 @@ function start_vm {
         if [ -x "'$(command -v nvidia-smi)'" ]; then
           echo '✅ GPU drivers are already installed. Skipping installation...'
         else
-          apt-get install -y linux-headers-"'${uname -r}'" dkms
+          apt-get install -y linux-headers-\${uname -r} dkms
 
           distro=
 
@@ -309,26 +309,26 @@ function start_vm {
             apt-key del 7fa2af80
 
             source /etc/os-release
-            distro="'${ID}${VERSION_ID}'"
+            distro=\${ID}\${VERSION_ID}
 
           elif [[ "'$(grep -Ei "ID=ubuntu" /etc/*release)'" ]]; then
             # Ubuntu OS
             apt-key del 7fa2af80
 
             source /etc/os-release
-            version=echo "'${VERSION_ID}'" | sed -e 's/\.//g'
-            distro="'${ID}${version}'"
+            version=echo \${VERSION_ID} | sed -e 's/\.//g'
+            distro=\${ID}\${version}
           fi
 
-          echo 'ℹ️ Installing GPU drivers for Linux distribution "'${distro}'"'
+          echo 'ℹ️ Installing GPU drivers for Linux distribution \${distro}'
 
-          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/"'${distro}'"/x86_64/cuda-keyring_1.0-1_all.deb
+          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/\${distro}/x86_64/cuda-keyring_1.0-1_all.deb
           dpkg -i cuda-keyring_1.0-1_all.deb
 
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y cuda
 
-          export PATH=/usr/local/cuda/bin"'${PATH:+:${PATH}}'"
+          export PATH=/usr/local/cuda/bin\${PATH:+:\${PATH}}
         fi
       else
         echo '❌ For GPU drivers, please use an image based on Debian. Terminating...'
@@ -347,13 +347,14 @@ function start_vm {
       gpu_status="'$(command -v nvidia-smi && nvidia-smi)'"
       gpu_retval="'$?'"
 
-      if [[ "'${gpu_retval}'" == 0 ]]; then
+      if [[ \${gpu_retval} == 0 ]]; then
           break
       fi
+
       echo 'GPU driver not ready yet, waiting 10 secs ...'
       sleep 10
     done
-    if [[ "'${gpu_retval}'" == 0 ]]; then
+    if [[ \${gpu_retval} == 0 ]]; then
       echo '✅ GPU driver ready ...'
     else
       echo '❌ Waited 5 minutes for GPU driver, without luck, terminating ...'
@@ -363,6 +364,10 @@ function start_vm {
   else
     echo "✅ Startup script won't install GPU drivers as there are no accelerators configured"
   fi
+
+  # print accumulated variables (only for temporary testing)
+  echo "ℹ️ Startup script:"
+  echo "${startup_script}"
 
   # Run service
   startup_script="
@@ -383,13 +388,6 @@ function start_vm {
   else
     runner_metadata=startup-script="${startup_script}"
   fi
-
-  # print accumulated variables (only for temporary testing)
-  echo "ℹ️ Startup script:"
-  echo "${startup_script}"
-  echo
-  echo "ℹ️ Runner metadata:"
-  echo "${runner_metadata}"
 
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
