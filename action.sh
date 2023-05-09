@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-ACTION_DIR="$( cd $( dirname "${BASH_SOURCE[0]}" ) >/dev/null 2>&1 && pwd )"
+# shellcheck disable=SC2016
+
+ACTION_DIR="$(cd $(dirname "${BASH_SOURCE[0]}") >/dev/null 2>&1 && pwd)"
 
 function usage {
   echo "Usage: ${0} --command=[start|stop] <arguments>"
@@ -62,87 +64,86 @@ while getopts_long :h opt \
   install_docker optional_argument \
   accelerator_type optional_argument \
   accelerator_count optional_argument \
-  help no_argument "" "$@"
-do
+  help no_argument "" "$@"; do
   case "$opt" in
-    command)
-      command=$OPTLARG
-      ;;
-    token)
-      token=$OPTLARG
-      ;;
-    project_id)
-      project_id=$OPTLARG
-      ;;
-    service_account_key)
-      service_account_key="$OPTLARG"
-      ;;
-    runner_ver)
-      runner_ver=$OPTLARG
-      ;;
-    machine_zone)
-      machine_zone=$OPTLARG
-      ;;
-    machine_type)
-      machine_type=$OPTLARG
-      ;;
-    disk_size)
-      disk_size=${OPTLARG-$disk_size}
-      ;;
-    runner_service_account)
-      runner_service_account=${OPTLARG-$runner_service_account}
-      ;;
-    image_project)
-      image_project=${OPTLARG-$image_project}
-      ;;
-    image)
-      image=${OPTLARG-$image}
-      ;;
-    image_family)
-      image_family=${OPTLARG-$image_family}
-      ;;
-    scopes)
-      scopes=$OPTLARG
-      ;;
-    shutdown_timeout)
-      shutdown_timeout=$OPTLARG
-      ;;
-    preemptible)
-      preemptible=$OPTLARG
-      ;;
-    ephemeral)
-      ephemeral=$OPTLARG
-      ;;
-    actions_preinstalled)
-      actions_preinstalled=$OPTLARG
-      ;;
-    name_prefix)
-      name_prefix=${OPTLARG-$name_prefix}
-      ;;
-    install_docker)
-      install_docker=$OPTLARG
-      ;;
-    accelerator_type)
-      accelerator_type=$OPTLARG
-      ;;
-    accelerator_count)
-      accelerator_count=$OPTLARG
-      ;;
-    h|help)
-      usage
-      exit 0
-      ;;
-    :)
-      printf >&2 '%s: %s\n' "${0##*/}" "$OPTLERR"
-      usage
-      exit 1
-      ;;
+  command)
+    command=$OPTLARG
+    ;;
+  token)
+    token=$OPTLARG
+    ;;
+  project_id)
+    project_id=$OPTLARG
+    ;;
+  service_account_key)
+    service_account_key="$OPTLARG"
+    ;;
+  runner_ver)
+    runner_ver=$OPTLARG
+    ;;
+  machine_zone)
+    machine_zone=$OPTLARG
+    ;;
+  machine_type)
+    machine_type=$OPTLARG
+    ;;
+  disk_size)
+    disk_size=${OPTLARG-$disk_size}
+    ;;
+  runner_service_account)
+    runner_service_account=${OPTLARG-$runner_service_account}
+    ;;
+  image_project)
+    image_project=${OPTLARG-$image_project}
+    ;;
+  image)
+    image=${OPTLARG-$image}
+    ;;
+  image_family)
+    image_family=${OPTLARG-$image_family}
+    ;;
+  scopes)
+    scopes=$OPTLARG
+    ;;
+  shutdown_timeout)
+    shutdown_timeout=$OPTLARG
+    ;;
+  preemptible)
+    preemptible=$OPTLARG
+    ;;
+  ephemeral)
+    ephemeral=$OPTLARG
+    ;;
+  actions_preinstalled)
+    actions_preinstalled=$OPTLARG
+    ;;
+  name_prefix)
+    name_prefix=${OPTLARG-$name_prefix}
+    ;;
+  install_docker)
+    install_docker=$OPTLARG
+    ;;
+  accelerator_type)
+    accelerator_type=$OPTLARG
+    ;;
+  accelerator_count)
+    accelerator_count=$OPTLARG
+    ;;
+  h | help)
+    usage
+    exit 0
+    ;;
+  :)
+    printf >&2 '%s: %s\n' "${0##*/}" "$OPTLERR"
+    usage
+    exit 1
+    ;;
   esac
 done
 
 function gcloud_auth {
   # NOTE: when --project is specified, it updates the config
-  echo ${service_account_key} | gcloud --project  ${project_id} --quiet auth activate-service-account --key-file - &>/dev/null
+  echo ${service_account_key} | gcloud --project ${project_id} --quiet auth activate-service-account --key-file - &>/dev/null
   echo "✅ Successfully configured gcloud."
 }
 
@@ -156,9 +157,9 @@ function start_vm {
   fi
 
   RUNNER_TOKEN=$(curl -S -s -XPOST \
-      -H "authorization: Bearer ${token}" \
-      https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runners/registration-token |\
-      jq -r .token)
+    -H "authorization: Bearer ${token}" \
+    https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runners/registration-token |
+    jq -r .token)
   echo "✅ Successfully got the GitHub Runner registration token"
 
   VM_ID="gce-gh-runner-${name_prefix}-${GITHUB_RUN_ID}-${RANDOM}"
@@ -169,8 +170,8 @@ function start_vm {
   disk_size_flag=$([[ -z "${disk_size}" ]] || echo "--boot-disk-size=${disk_size}")
   preemptible_flag=$([[ "${preemptible}" == "true" ]] && echo "--preemptible" || echo "")
   ephemeral_flag=$([[ "${ephemeral}" == "true" ]] && echo "--ephemeral" || echo "")
-  accelerator=$([[ -n "${accelerator_type}"  ]] && \
-    echo "--accelerator type=${accelerator_type},count=${accelerator_count} --maintenance-policy=TERMINATE" || \
+  accelerator=$([[ -n "${accelerator_type}" ]] &&
+    echo "--accelerator type=${accelerator_type},count=${accelerator_count} --maintenance-policy=TERMINATE" ||
     echo "")
 
   echo "The new GCE VM will be ${VM_ID}"
@@ -200,44 +201,41 @@ function start_vm {
     "
 
   # Install docker if desired
-  if $install_docker ; then
+  if $install_docker; then
     echo "✅ Startup script will install and configure Docker"
 
-    startup_script="
-    ${startup_script}
-    if [[ "'$(grep -Ei "debian|ubuntu" /etc/*release)'" ]]; then
-      if [ -x "'$(command -v docker)'" ]; then
-        echo '✅ Docker is already installed. Skipping installation...'
+    install_docker_packages='
+    if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
+      if [ -x $(command -v docker) ]; then
+        echo "✅ Docker is already installed. Skipping installation..."
       else
         apt-get install -y ca-certificates curl gnupg
 
         docker_url=
         docker_url_gpg=
 
-        if [[ "'$(grep -Ei "ID=debian" /etc/*release)'" ]]; then
+        if [[ $(grep -Ei "ID=debian" /etc/*release) ]]; then
           # Debian OS
           docker_url=https://download.docker.com/linux/debian
           docker_url_gpg=https://download.docker.com/linux/debian/gpg
-        elif [[ "'$(grep -Ei "ID=ubuntu" /etc/*release)'" ]]; then
+        elif [[ $(grep -Ei "ID=ubuntu" /etc/*release) ]]; then
           # Ubuntu OS
           docker_url=https://download.docker.com/linux/ubuntu
           docker_url_gpg=https://download.docker.com/linux/ubuntu/gpg
         fi
 
-        docker_packages='docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin'
+        docker_packages="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
 
-        echo 'Docker is not installed. Installing Docker daemon...'
+        echo "Docker is not installed. Installing Docker daemon..."
         install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL \${docker_url_gpg} | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        curl -fsSL ${docker_url_gpg} | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         chmod a+r /etc/apt/keyrings/docker.gpg
 
-        echo 'deb [arch="'$(dpkg --print-architecture)'" signed-by=/etc/apt/keyrings/docker.gpg] \${docker_url} \
-          "'$(. /etc/os-release && echo $VERSION_CODENAME)'" stable' | \
-          tee /etc/apt/sources.list.d/docker.list > /dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_url} $(. /etc/os-release && echo $VERSION_CODENAME) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
         apt-get update
-        apt-get install -y \${docker_packages}
-        echo '✅ Docker successfully installed'
+        apt-get install -y ${docker_packages}
+        echo "✅ Docker successfully installed"
 
         # Enable docker.service
         systemctl is-active --quiet docker.service || systemctl start docker.service
@@ -246,24 +244,30 @@ function start_vm {
         # Docker daemon takes time to come up after installing
         sleep 5
         docker info
-        echo '✅ Docker successfully installed and configured'
+        echo "✅ Docker successfully installed and configured"
       fi
-
+      '"
       echo 'Configuring runner user for Docker daemon...'
       usermod -aG docker ${runner_user}
       systemctl restart docker.service
       echo '✅ User successfully added to Docker group'
+      "'
     else
-      echo '❌ For Docker, please use an image based on Debian. Terminating...'
+      echo "❌ For Docker, please use an image based on Debian. Terminating..."
       exit 1
     fi
+    '
+
+    startup_script="
+    ${startup_script}
+    ${install_docker_packages}
     "
   else
     echo "✅ Startup script won't install Docker daemon"
   fi
 
   # Install GitHub actions if desired
-  if $actions_preinstalled ; then
+  if $actions_preinstalled; then
     echo "✅ Startup script won't install GitHub Actions (pre-installed)"
     startup_script="
     ${startup_script}
@@ -292,48 +296,52 @@ function start_vm {
       runner_metadata="install-nvidia-driver=True"
     elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
       echo "✅ Startup script will install GPU drivers on a base VM"
-      startup_script="
-      ${startup_script}
-      if [[ "'$(grep -Ei "debian|ubuntu" /etc/*release)'" ]]; then
-        if [ -x "'$(command -v nvidia-smi)'" ]; then
-          echo '✅ GPU drivers are already installed. Skipping installation...'
+      install_gpu_drivers='
+      if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
+        if [ -x $(command -v nvidia-smi) ]; then
+          echo "✅ GPU drivers are already installed. Skipping installation..."
         else
-          apt-get install -y linux-headers-\${uname -r} dkms
+          apt-get install -y linux-headers-${uname -r} dkms
 
           distro=
 
-          if [[ "'$(grep -Ei "ID=debian" /etc/*release)'" ]]; then
+          if [[ $(grep -Ei "ID=debian" /etc/*release) ]]; then
             # Debian OS
             apt-get install -y software-properties-common
             add-apt-repository contrib
             apt-key del 7fa2af80
 
             source /etc/os-release
-            distro=\${ID}\${VERSION_ID}
+            distro=${ID}${VERSION_ID}
 
-          elif [[ "'$(grep -Ei "ID=ubuntu" /etc/*release)'" ]]; then
+          elif [[ $(grep -Ei "ID=ubuntu" /etc/*release) ]]; then
             # Ubuntu OS
             apt-key del 7fa2af80
 
             source /etc/os-release
-            version=echo \${VERSION_ID} | sed -e 's/\.//g'
-            distro=\${ID}\${version}
+            version=echo ${VERSION_ID} | sed -e "s/\.//g"
+            distro=${ID}${version}
           fi
 
-          echo 'ℹ️ Installing GPU drivers for Linux distribution \${distro}'
+          echo "ℹ️ Installing GPU drivers for Linux distribution ${distro}"
 
-          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/\${distro}/x86_64/cuda-keyring_1.0-1_all.deb
+          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.0-1_all.deb
           dpkg -i cuda-keyring_1.0-1_all.deb
 
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y cuda
 
-          export PATH=/usr/local/cuda/bin\${PATH:+:\${PATH}}
+          export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
         fi
       else
-        echo '❌ For GPU drivers, please use an image based on Debian. Terminating...'
+        echo "❌ For GPU drivers, please use an image based on Debian. Terminating..."
         exit 1
       fi
+      '
+
+      startup_script="
+      ${startup_script}
+      ${install_gpu_drivers}
       "
     else
       echo "❌ Accelerators should only be used with Deep Learning images from project ${dl_image_project} or
@@ -341,26 +349,31 @@ function start_vm {
       exit 1
     fi
 
-    startup_script="
-    ${startup_script}
+    check_driver_status='
     while (( i++ < 30)); do
-      gpu_status="'$(command -v nvidia-smi && nvidia-smi)'"
-      gpu_retval="'$?'"
+      gpu_status=$(command -v nvidia-smi && nvidia-smi)
+      gpu_retval=$?
 
-      if [[ \${gpu_retval} == 0 ]]; then
+      if [[ ${gpu_retval} == 0 ]]; then
           break
       fi
 
-      echo 'GPU driver not ready yet, waiting 10 secs ...'
+      echo "GPU driver not ready yet, waiting 10 secs ..."
       sleep 10
     done
-    if [[ \${gpu_retval} == 0 ]]; then
-      echo '✅ GPU driver ready ...'
+    if [[ ${gpu_retval} == 0 ]]; then
+      echo "✅ GPU driver ready ..."
     else
-      echo '❌ Waited 5 minutes for GPU driver, without luck, terminating ...'
+      echo "❌ Waited 5 minutes for GPU driver without luck, terminating ..."
       exit 1
     fi
+    '
+
+    startup_script="
+    ${startup_script}
+    ${check_driver_status}
     "
+
   else
     echo "✅ Startup script won't install GPU drivers as there are no accelerators configured"
   fi
@@ -401,11 +414,11 @@ function start_vm {
     ${preemptible_flag} \
     ${accelerator} \
     --labels=gh_ready=0 \
-    --metadata="${runner_metadata}" \
-    && echo "label=${VM_ID}" >> $GITHUB_OUTPUT
+    --metadata="${runner_metadata}" &&
+    echo "label=${VM_ID}" >>$GITHUB_OUTPUT
 
   safety_off
-  while (( i++ < 60 )); do
+  while ((i++ < 60)); do
     GH_READY=$(gcloud compute instances describe ${VM_ID} --zone=${machine_zone} --format='json(labels)' | jq -r .labels.gh_ready)
     if [[ $GH_READY == 1 ]]; then
       break
@@ -425,14 +438,14 @@ function start_vm {
 function stop_vm {
   # NOTE: this function runs on the GCE VM
   echo "Stopping GCE VM ..."
-  
+
   if [[ -z "${service_account_key}" ]] || [[ -z "${project_id}" ]]; then
     echo "Won't authenticate gcloud. If you wish to authenticate gcloud provide both service_account_key and project_id."
   else
     echo "Will authenticate gcloud."
     gcloud_auth
   fi
-  
+
   NAME=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/name -H 'Metadata-Flavor: Google')
   ZONE=$(curl -S -s -X GET http://metadata.google.internal/computeMetadata/v1/instance/zone -H 'Metadata-Flavor: Google')
   echo "✅ Self deleting $NAME in $ZONE in ${shutdown_timeout} seconds ..."
@@ -441,15 +454,15 @@ function stop_vm {
 
 safety_on
 case "$command" in
-  start)
-    start_vm
-    ;;
-  stop)
-    stop_vm
-    ;;
-  *)
-    echo "Invalid command: \`${command}\`, valid values: start|stop" >&2
-    usage
-    exit 1
-    ;;
+start)
+  start_vm
+  ;;
+stop)
+  stop_vm
+  ;;
+*)
+  echo "Invalid command: \`${command}\`, valid values: start|stop" >&2
+  usage
+  exit 1
+  ;;
 esac
