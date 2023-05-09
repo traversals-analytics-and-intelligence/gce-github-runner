@@ -283,16 +283,83 @@ function start_vm {
 
   # Install GPU drivers if accelerator option is set
   if [[ -n ${accelerator} ]]; then
-    required_image_project="deeplearning-platform-release"
+    # define allowed image projects
+    dl_image_project="deeplearning-platform-release"
+    base_image_projects=("debian-cloud" "ubuntu-os-cloud")
 
-    if [[ -n ${image_project} ]] && [ ${image_project} = ${required_image_project} ]; then
-      echo "✅ Startup script will install GPU drivers"
+    if [[ -n ${image_project} ]] && [ ${image_project} = ${dl_image_project} ]; then
+      echo "✅ Startup script will install GPU drivers on Deep Learning VM"
       runner_metadata="install-nvidia-driver=True"
+    elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
+      echo "✅ Startup script will install GPU drivers on a base VM"
+      startup_script="
+      ${startup_script}
+      if [[ "'$(grep -Ei "debian|ubuntu" /etc/*release)'" ]]; then
+        if [ -x "'$(command -v nvidia-smi)'" ]; then
+          echo '✅ GPU drivers are already installed. Skipping installation...'
+        else
+          apt-get install -y linux-headers-"'${uname -r}'" dkms
+
+          distro=
+
+          if [[ "'$(grep -Ei "ID=debian" /etc/*release)'" ]]; then
+            # Debian OS
+            apt-get install -y software-properties-common
+            add-apt-repository contrib
+            apt-key del 7fa2af80
+
+            source /etc/os-release
+            distro="'${ID}${VERSION_ID}'"
+
+          elif [[ "'$(grep -Ei "ID=ubuntu" /etc/*release)'" ]]; then
+            # Ubuntu OS
+            apt-key del 7fa2af80
+
+            source /etc/os-release
+            version=echo "'${VERSION_ID}'" | sed -e 's/\.//g'
+            distro="'${ID}${version}'"
+          fi
+
+          echo 'ℹ️ Installing GPU drivers for Linux distribution "'${distro}'"'
+
+          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/"'${distro}'"/x86_64/cuda-keyring_1.0-1_all.deb
+          dpkg -i cuda-keyring_1.0-1_all.deb
+
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y cuda
+
+          export PATH=/usr/local/cuda/bin"'${PATH:+:${PATH}}'"
+        fi
+      else
+        echo '❌ For GPU drivers, please use an image based on Debian. Terminating...'
+        exit 1
+      fi
+      "
     else
-      echo "❌ Accelerators should only be used with public images from project ${required_image_project}. Terminating..."
+      echo "❌ Accelerators should only be used with Deep Learning images from project ${dl_image_project} or
+      with base images from a project in [${base_image_projects[*]}]. Terminating..."
       exit 1
     fi
 
+    startup_script="
+    ${startup_script}
+    while (( i++ < 30)); do
+      gpu_status="'$(command -v nvidia-smi && nvidia-smi)'"
+      gpu_retval="'$?'"
+
+      if [[ "'${gpu_retval}'" == 0 ]]; then
+          break
+      fi
+      echo 'GPU driver not ready yet, waiting 10 secs ...'
+      sleep 10
+    done
+    if [[ "'${gpu_retval}'" == 0 ]]; then
+      echo '✅ GPU driver ready ...'
+    else
+      echo '❌ Waited 5 minutes for GPU driver, without luck, terminating ...'
+      exit 1
+    fi
+    "
   else
     echo "✅ Startup script won't install GPU drivers as there are no accelerators configured"
   fi
