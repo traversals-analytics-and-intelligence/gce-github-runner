@@ -188,7 +188,7 @@ function start_vm {
     ${startup_script}
     apt-get update
     apt-get install -y ${additional_packages}
-    echo '✅ Packages successfully installed'
+    echo 'Packages successfully installed'
   "
 
   # Create dedicated user
@@ -197,7 +197,7 @@ function start_vm {
     ${startup_script}
     useradd -s /bin/bash -m -d ${runner_dir} -G sudo ${runner_user}
     echo '${runner_user} ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-    echo '✅ User successfully created'
+    echo 'User successfully created'
     "
 
   # Install docker if desired
@@ -207,7 +207,7 @@ function start_vm {
     install_docker_packages='
     if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
       if [ -x $(command -v docker) ]; then
-        echo "✅ Docker is already installed. Skipping installation..."
+        echo "Docker is already installed. Skipping installation..."
       else
         apt-get install -y ca-certificates curl gnupg
 
@@ -228,14 +228,14 @@ function start_vm {
 
         echo "Docker is not installed. Installing Docker daemon..."
         install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL ${docker_url_gpg} | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        curl -fsSL $docker_url_gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         chmod a+r /etc/apt/keyrings/docker.gpg
 
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_url} $(. /etc/os-release && echo $VERSION_CODENAME) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] $docker_url $(source /etc/os-release && echo $VERSION_CODENAME) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
         apt-get update
-        apt-get install -y ${docker_packages}
-        echo "✅ Docker successfully installed"
+        apt-get install -y $docker_packages
+        echo "Docker successfully installed"
 
         # Enable docker.service
         systemctl is-active --quiet docker.service || systemctl start docker.service
@@ -244,16 +244,16 @@ function start_vm {
         # Docker daemon takes time to come up after installing
         sleep 5
         docker info
-        echo "✅ Docker successfully installed and configured"
+        echo "Docker successfully installed and configured"
       fi
       '"
       echo 'Configuring runner user for Docker daemon...'
       usermod -aG docker ${runner_user}
       systemctl restart docker.service
-      echo '✅ User successfully added to Docker group'
+      echo 'User successfully added to Docker group'
       "'
     else
-      echo "❌ For Docker, please use an image based on Debian. Terminating..."
+      echo "For Docker, please use an image based on Debian. Terminating..."
       exit 1
     fi
     '
@@ -299,7 +299,7 @@ function start_vm {
       install_gpu_drivers='
       if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
         if [ -x $(command -v nvidia-smi) ]; then
-          echo "✅ GPU drivers are already installed. Skipping installation..."
+          echo "GPU drivers are already installed. Skipping installation..."
         else
           apt-get install -y linux-headers-${uname -r} dkms
 
@@ -323,7 +323,7 @@ function start_vm {
             distro=${ID}${version}
           fi
 
-          echo "ℹ️ Installing GPU drivers for Linux distribution ${distro}"
+          echo "Installing GPU drivers for Linux distribution ${distro}"
 
           curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.0-1_all.deb
           dpkg -i cuda-keyring_1.0-1_all.deb
@@ -334,7 +334,7 @@ function start_vm {
           export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
         fi
       else
-        echo "❌ For GPU drivers, please use an image based on Debian. Terminating..."
+        echo "For GPU drivers, please use an image based on Debian. Terminating..."
         exit 1
       fi
       '
@@ -354,17 +354,17 @@ function start_vm {
       gpu_status=$(command -v nvidia-smi && nvidia-smi)
       gpu_retval=$?
 
-      if [[ ${gpu_retval} == 0 ]]; then
+      if [[ $gpu_retval == 0 ]]; then
           break
       fi
 
-      echo "GPU driver not ready yet, waiting 10 secs ..."
+      echo "GPU driver not ready yet, waiting for 10 seconds..."
       sleep 10
     done
-    if [[ ${gpu_retval} == 0 ]]; then
-      echo "✅ GPU driver ready ..."
+    if [[ $gpu_retval == 0 ]]; then
+      echo "GPU driver is ready..."
     else
-      echo "❌ Waited 5 minutes for GPU driver without luck, terminating ..."
+      echo "Waited 5 minutes for the GPU driver to be ready without luck. Terminating..."
       exit 1
     fi
     '
