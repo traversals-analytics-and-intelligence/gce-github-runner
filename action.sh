@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # shellcheck disable=SC2016
+# shellcheck disable=SC2002
 
 ACTION_DIR="$(cd $(dirname "${BASH_SOURCE[0]}") >/dev/null 2>&1 && pwd)"
 
@@ -180,7 +181,7 @@ function start_vm {
   runner_user="runner"
   runner_dir="/home/${runner_user}"
 
-  runner_metadata=""
+  metadata=""
 
   # Install mandatory packages
   echo "✅ Startup script will install all necessary packages"
@@ -293,7 +294,7 @@ function start_vm {
 
     if [[ -n ${image_project} ]] && [ ${image_project} = ${dl_image_project} ]; then
       echo "✅ Startup script will install GPU drivers on Deep Learning VM"
-      runner_metadata="install-nvidia-driver=True"
+      metadata="install-nvidia-driver=True"
     elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
       echo "✅ Startup script will install GPU drivers on a base VM"
       install_gpu_drivers='
@@ -301,7 +302,7 @@ function start_vm {
         if [ -x $(command -v nvidia-smi) ]; then
           echo "GPU drivers are already installed. Skipping installation..."
         else
-          apt-get install -y linux-headers-${uname -r} dkms
+          apt-get install -y linux-headers-$(uname -r) dkms
 
           distro=
 
@@ -312,18 +313,18 @@ function start_vm {
             apt-key del 7fa2af80
 
             source /etc/os-release
-            distro=${ID}${VERSION_ID}
+            distro=$ID$VERSION_ID
 
           elif [[ $(grep -Ei "ID=ubuntu" /etc/*release) ]]; then
             # Ubuntu OS
             apt-key del 7fa2af80
 
             source /etc/os-release
-            version=echo ${VERSION_ID} | sed -e "s/\.//g"
-            distro=${ID}${version}
+            version=echo $VERSION_ID | sed -e "s/\.//g"
+            distro=$ID$version
           fi
 
-          echo "Installing GPU drivers for Linux distribution ${distro}"
+          echo "Installing GPU drivers for Linux distribution $distro"
 
           curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.0-1_all.deb
           dpkg -i cuda-keyring_1.0-1_all.deb
@@ -350,18 +351,20 @@ function start_vm {
     fi
 
     check_driver_status='
+    GPU_READY=0
     while (( i++ < 30)); do
       gpu_status=$(command -v nvidia-smi && nvidia-smi)
       gpu_retval=$?
 
       if [[ $gpu_retval == 0 ]]; then
-          break
+        GPU_READY=1
+        break
       fi
 
       echo "GPU driver not ready yet, waiting for 10 seconds..."
       sleep 10
     done
-    if [[ $gpu_retval == 0 ]]; then
+    if [[ $GPU_READY == 1 ]]; then
       echo "GPU driver is ready..."
     else
       echo "Waited 5 minutes for the GPU driver to be ready without luck. Terminating..."
@@ -378,10 +381,6 @@ function start_vm {
     echo "✅ Startup script won't install GPU drivers as there are no accelerators configured"
   fi
 
-  # print accumulated variables (only for temporary testing)
-  echo "ℹ️ Startup script:"
-  echo "${startup_script}"
-
   # Run service
   startup_script="
     ${startup_script}
@@ -396,11 +395,32 @@ function start_vm {
     echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
     "
 
-  if [[ -n ${runner_metadata} ]]; then
-    runner_metadata=${runner_metadata},startup-script="${startup_script}"
-  else
-    runner_metadata=startup-script="${startup_script}"
+  # Write startup script to a file
+  startup_script_path=/tmp/startup-script.sh
+  if [[ -n ${startup_script} ]]; then
+    printf "%s\n" "${startup_script}" > ${startup_script_path}
+    metadata_from_file="startup-script=${startup_script_path}"
   fi
+
+  # Prepare metadata
+  if [[ -n ${metadata} ]]; then
+    metadata=$(echo "--metadata=${metadata}")
+  fi
+
+  # Prepare metadata from file
+  if [[ -n ${startup_script} ]]; then
+    metadata_from_file=$(echo "--metadata-from-file=${metadata_from_file}")
+  fi
+
+  # print startup script (only for temporary testing)
+  echo "ℹ️ Startup script:"
+  cat ${startup_script_path} | head -n 15
+
+  echo "ℹ️ Metadata:"
+  echo "${metadata}"
+
+  echo "ℹ️ Metadata from file:"
+  echo "${metadata_from_file}"
 
   gcloud compute instances create ${VM_ID} \
     --zone=${machine_zone} \
@@ -413,8 +433,9 @@ function start_vm {
     ${image_family_flag} \
     ${preemptible_flag} \
     ${accelerator} \
-    --labels=gh_ready=0 \
-    --metadata="${runner_metadata}" &&
+    ${metadata} \
+    ${metadata_from_file} \
+    --labels=gh_ready=0 &&
     echo "label=${VM_ID}" >>$GITHUB_OUTPUT
 
   safety_off
