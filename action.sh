@@ -207,7 +207,7 @@ function start_vm {
 
     install_docker_packages='
     if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
-      if [ -x $(command -v docker) ]; then
+      if [ $(command -v docker) ]; then
         echo "Docker is already installed. Skipping installation..."
       else
         apt-get install -y ca-certificates curl gnupg
@@ -299,7 +299,7 @@ function start_vm {
       echo "✅ Startup script will install GPU drivers on a base VM"
       install_gpu_drivers='
       if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
-        if [ -x $(command -v nvidia-smi) ]; then
+        if [ $(command -v nvidia-smi) ]; then
           echo "GPU drivers are already installed. Skipping installation..."
         else
           apt-get install -y linux-headers-$(uname -r) dkms
@@ -320,13 +320,13 @@ function start_vm {
             apt-key del 7fa2af80
 
             source /etc/os-release
-            version=echo $VERSION_ID | sed -e "s/\.//g"
+            version=$(echo $VERSION_ID | sed -e "s/\.//g")
             distro=$ID$version
           fi
 
           echo "Installing GPU drivers for Linux distribution $distro"
 
-          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/${distro}/x86_64/cuda-keyring_1.0-1_all.deb
+          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/$distro/x86_64/cuda-keyring_1.0-1_all.deb
           dpkg -i cuda-keyring_1.0-1_all.deb
 
           apt-get update
@@ -411,10 +411,6 @@ function start_vm {
   if [[ -n ${startup_script} ]]; then
     metadata_from_file=$(echo "--metadata-from-file=${metadata_from_file}")
   fi
-
-  # print startup script (only for temporary testing)
-  echo "ℹ️ Startup script:"
-  cat ${startup_script_path} | head -n 15
 
   echo "ℹ️ Metadata:"
   echo "${metadata}"
