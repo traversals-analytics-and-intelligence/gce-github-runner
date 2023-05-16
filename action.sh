@@ -19,8 +19,7 @@ function safety_off {
 }
 
 source "${ACTION_DIR}/vendor/getopts_long.sh"
-source "${ACTION_DIR}/vendor/docker.sh"
-source "${ACTION_DIR}/vendor/gpu.sh"
+source "${ACTION_DIR}/vendor/workflow.sh"
 
 command=
 token=
@@ -187,103 +186,29 @@ function start_vm {
   metadata=""
 
   # Install mandatory packages
-  echo "✅ Startup script will install all necessary packages"
-  startup_script="
-    ${startup_script}
-    apt-get update
-    apt-get install -y ${additional_packages}
-    echo 'Packages successfully installed'
-  "
+  install_additional_packages startup_script ${additional_packages}
 
   # Create dedicated user
-  echo "✅ Startup script will create a dedicated user for runner"
-  startup_script="
-    ${startup_script}
-    useradd -s /bin/bash -m -d ${runner_dir} -G sudo ${runner_user}
-    echo '${runner_user} ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-    echo 'User successfully created'
-    "
+  create_runner_user startup_script ${runner_user} ${runner_dir}
 
   # Install docker if desired
-  if $install_docker; then
-    echo "✅ Startup script will install and configure Docker"
-
-    install_docker_packages="$(docker_manual_install ${runner_user})"
-
-    startup_script="
-    ${startup_script}
-    ${install_docker_packages}
-    "
-  else
-    echo "✅ Startup script won't install Docker daemon"
-  fi
+  install_docker_package startup_script ${install_docker} ${runner_user}
 
   # Install GitHub actions if desired
-  if $actions_preinstalled; then
-    echo "✅ Startup script won't install GitHub Actions (pre-installed)"
-    startup_script="
-    ${startup_script}
-    cd ${runner_dir}/actions-runner
-    "
-  else
-    echo "✅ Startup script will install GitHub Actions"
-    startup_script="
-    ${startup_script}
-    mkdir -p ${runner_dir}/actions-runner
-    cd ${runner_dir}/actions-runner
-    curl -o actions-runner-linux-x64-${runner_ver}.tar.gz -L https://github.com/actions/runner/releases/download/v${runner_ver}/actions-runner-linux-x64-${runner_ver}.tar.gz
-    tar xzf ./actions-runner-linux-x64-${runner_ver}.tar.gz
-    ./bin/installdependencies.sh
-    "
-  fi
+  install_github_runner startup_script ${actions_preinstalled} ${runner_dir} ${runner_ver}
 
   # Install GPU drivers if accelerator option is set
-  if [[ -n ${accelerator} ]]; then
-    # define allowed image projects
-    dl_image_project="deeplearning-platform-release"
-    base_image_projects=("debian-cloud" "ubuntu-os-cloud")
-
-    if [[ -n ${image_project} ]] && [ ${image_project} = ${dl_image_project} ]; then
-      echo "✅ Startup script will install GPU drivers on Deep Learning VM"
-      metadata="install-nvidia-driver=True"
-    elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
-      echo "✅ Startup script will install GPU drivers on a base VM"
-      install_gpu_drivers="$(cuda_manual_install ${runner_user})"
-
-      startup_script="
-      ${startup_script}
-      ${install_gpu_drivers}
-      "
-    else
-      echo "❌ Accelerators should only be used with Deep Learning images from project ${dl_image_project} or
-      with base images from a project in [${base_image_projects[*]}]. Terminating..."
-      exit 1
-    fi
-
-    check_driver_status="$(check_gpu_driver)"
-
-    startup_script="
-    ${startup_script}
-    ${check_driver_status}
-    "
-
-  else
-    echo "✅ Startup script won't install GPU drivers as there are no accelerators configured"
-  fi
+  install_gpu_driver startup_script ${accelerator} ${runner_user} metadata ${image_project}
 
   # Run service
-  startup_script="
-    ${startup_script}
-    gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=0
-    sudo -u ${runner_user} ./config.sh --url https://github.com/${GITHUB_REPOSITORY} --token ${RUNNER_TOKEN} --labels ${VM_ID} --unattended ${ephemeral_flag} --disableupdate
-    sudo -u ${runner_user} sudo ./svc.sh install
-    sudo -u ${runner_user} sudo ./svc.sh start
-    sudo rm -rf _diag _work
-
-    gcloud compute instances add-labels ${VM_ID} --zone=${machine_zone} --labels=gh_ready=1
-    # 3 days represents the max workflow runtime. This will shutdown the instance if everything else fails.
-    echo \"gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}\" | at now + 3 days
-    "
+  start_runner \
+    startup_script \
+    ${VM_ID} \
+    ${RUNNER_TOKEN} \
+    ${runner_user} \
+    ${ephemeral_flag} \
+    ${machine_zone} \
+    ${project_id}
 
   # Write startup script to a file
   startup_script_path=/tmp/startup-script.sh
