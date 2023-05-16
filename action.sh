@@ -198,7 +198,7 @@ function start_vm {
   install_github_runner startup_script ${actions_preinstalled} ${runner_dir} ${runner_ver}
 
   # Install GPU drivers if accelerator option is set
-  install_gpu_driver startup_script ${accelerator} ${runner_user} metadata ${image_project}
+  install_gpu_driver startup_script metadata ${accelerator} ${runner_user} ${image_project}
 
   # Run service
   start_runner \

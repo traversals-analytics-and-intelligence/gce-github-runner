@@ -111,9 +111,9 @@ function install_gpu_driver {
   fi
 
   local -n script=$1
-  local accelerator=$2
-  local runner_user=$3
-  local -n metadata=$4
+  local -n runner_metadata=$2
+  local accelerator=$3
+  local runner_user=$4
   local image_project=$5
 
   if [[ -n ${accelerator} ]]; then
@@ -123,7 +123,7 @@ function install_gpu_driver {
 
     if [[ -n ${image_project} ]] && [ ${image_project} = ${dl_image_project} ]; then
       echo "✅ Startup script will install GPU drivers on Deep Learning VM"
-      metadata="install-nvidia-driver=True"
+      runner_metadata="install-nvidia-driver=True"
     elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
       echo "✅ Startup script will install GPU drivers on a base VM"
       local install_gpu_drivers
