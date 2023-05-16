@@ -2,6 +2,7 @@
 
 # shellcheck disable=SC2016
 # shellcheck disable=SC2002
+# shellcheck disable=SC2046
 
 ACTION_DIR="$(cd $(dirname "${BASH_SOURCE[0]}") >/dev/null 2>&1 && pwd)"
 
@@ -18,6 +19,8 @@ function safety_off {
 }
 
 source "${ACTION_DIR}/vendor/getopts_long.sh"
+source "${ACTION_DIR}/vendor/docker.sh"
+source "${ACTION_DIR}/vendor/gpu.sh"
 
 command=
 token=
@@ -205,59 +208,7 @@ function start_vm {
   if $install_docker; then
     echo "✅ Startup script will install and configure Docker"
 
-    install_docker_packages='
-    if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
-      if [ $(command -v docker) ]; then
-        echo "Docker is already installed. Skipping installation..."
-      else
-        apt-get install -y ca-certificates curl gnupg
-
-        docker_url=
-        docker_url_gpg=
-
-        if [[ $(grep -Ei "ID=debian" /etc/*release) ]]; then
-          # Debian OS
-          docker_url=https://download.docker.com/linux/debian
-          docker_url_gpg=https://download.docker.com/linux/debian/gpg
-        elif [[ $(grep -Ei "ID=ubuntu" /etc/*release) ]]; then
-          # Ubuntu OS
-          docker_url=https://download.docker.com/linux/ubuntu
-          docker_url_gpg=https://download.docker.com/linux/ubuntu/gpg
-        fi
-
-        docker_packages="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
-
-        echo "Docker is not installed. Installing Docker daemon..."
-        install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL $docker_url_gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-        chmod a+r /etc/apt/keyrings/docker.gpg
-
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] $docker_url $(source /etc/os-release && echo $VERSION_CODENAME) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-        apt-get update
-        apt-get install -y $docker_packages
-        echo "Docker successfully installed"
-
-        # Enable docker.service
-        systemctl is-active --quiet docker.service || systemctl start docker.service
-        systemctl is-enabled --quiet docker.service || systemctl enable docker.service
-
-        # Docker daemon takes time to come up after installing
-        sleep 5
-        docker info
-        echo "Docker successfully installed and configured"
-      fi
-      '"
-      echo 'Configuring runner user for Docker daemon...'
-      usermod -aG docker ${runner_user}
-      systemctl restart docker.service
-      echo 'User successfully added to Docker group'
-      "'
-    else
-      echo "For Docker, please use an image based on Debian. Terminating..."
-      exit 1
-    fi
-    '
+    install_docker_packages="$(docker_manual_install ${runner_user})"
 
     startup_script="
     ${startup_script}
@@ -297,48 +248,7 @@ function start_vm {
       metadata="install-nvidia-driver=True"
     elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
       echo "✅ Startup script will install GPU drivers on a base VM"
-      install_gpu_drivers='
-      if [[ $(grep -Ei "debian|ubuntu" /etc/*release) ]]; then
-        if [ $(command -v nvidia-smi) ]; then
-          echo "GPU drivers are already installed. Skipping installation..."
-        else
-          apt-get install -y linux-headers-$(uname -r) dkms
-
-          distro=
-
-          if [[ $(grep -Ei "ID=debian" /etc/*release) ]]; then
-            # Debian OS
-            apt-get install -y software-properties-common
-            add-apt-repository contrib
-            apt-key del 7fa2af80
-
-            source /etc/os-release
-            distro=$ID$VERSION_ID
-
-          elif [[ $(grep -Ei "ID=ubuntu" /etc/*release) ]]; then
-            # Ubuntu OS
-            apt-key del 7fa2af80
-
-            source /etc/os-release
-            version=$(echo $VERSION_ID | sed -e "s/\.//g")
-            distro=$ID$version
-          fi
-
-          echo "Installing GPU drivers for Linux distribution $distro"
-
-          curl -fsSL -O https://developer.download.nvidia.com/compute/cuda/repos/$distro/x86_64/cuda-keyring_1.0-1_all.deb
-          dpkg -i cuda-keyring_1.0-1_all.deb
-
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y cuda
-
-          export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
-        fi
-      else
-        echo "For GPU drivers, please use an image based on Debian. Terminating..."
-        exit 1
-      fi
-      '
+      install_gpu_drivers="$(cuda_manual_install)"
 
       startup_script="
       ${startup_script}
@@ -350,27 +260,7 @@ function start_vm {
       exit 1
     fi
 
-    check_driver_status='
-    GPU_READY=0
-    while (( i++ < 30)); do
-      gpu_status=$(command -v nvidia-smi && nvidia-smi)
-      gpu_retval=$?
-
-      if [[ $gpu_retval == 0 ]]; then
-        GPU_READY=1
-        break
-      fi
-
-      echo "GPU driver not ready yet, waiting for 10 seconds..."
-      sleep 10
-    done
-    if [[ $GPU_READY == 1 ]]; then
-      echo "GPU driver is ready..."
-    else
-      echo "Waited 5 minutes for the GPU driver to be ready without luck. Terminating..."
-      exit 1
-    fi
-    '
+    check_driver_status="$(check_gpu_driver)"
 
     startup_script="
     ${startup_script}
@@ -432,7 +322,7 @@ function start_vm {
     ${metadata} \
     ${metadata_from_file} \
     --labels=gh_ready=0 &&
-    echo "label=${VM_ID}" >>$GITHUB_OUTPUT
+    echo "label=${VM_ID}" >> $GITHUB_OUTPUT
 
   safety_off
   while ((i++ < 90)); do
@@ -446,7 +336,7 @@ function start_vm {
   if [[ $GH_READY == 1 ]]; then
     echo "✅ ${VM_ID} ready ..."
   else
-    echo "Waited 15 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
+    echo "❌ Waited 15 minutes for ${VM_ID}, without luck, deleting ${VM_ID} ..."
     gcloud --quiet compute instances delete ${VM_ID} --zone=${machine_zone} --project=${project_id}
     exit 1
   fi
