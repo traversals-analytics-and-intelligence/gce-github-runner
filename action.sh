@@ -248,7 +248,7 @@ function start_vm {
       metadata="install-nvidia-driver=True"
     elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
       echo "✅ Startup script will install GPU drivers on a base VM"
-      install_gpu_drivers="$(cuda_manual_install)"
+      install_gpu_drivers="$(cuda_manual_install ${runner_user})"
 
       startup_script="
       ${startup_script}
