@@ -186,34 +186,29 @@ function start_vm {
   metadata=""
 
   # Install mandatory packages
-  install_additional_packages startup_script ${additional_packages}
+  install_additional_packages startup_script "${additional_packages}"
 
   # Create dedicated user
-  create_runner_user startup_script ${runner_user} ${runner_dir}
+  create_runner_user startup_script "${runner_user}" "${runner_dir}"
 
   # Install docker if desired
-  install_docker_package startup_script ${install_docker} ${runner_user}
+  install_docker_package startup_script "${install_docker}" "${runner_user}"
 
   # Install GitHub actions if desired
-  install_github_runner startup_script ${actions_preinstalled} ${runner_dir} ${runner_ver}
+  install_github_runner startup_script "${actions_preinstalled}" "${runner_dir}" "${runner_ver}"
 
   # Install GPU drivers if accelerator option is set
-  echo "${startup_script}"
-  echo "${metadata}"
-  echo "${accelerator}"
-  echo "${runner_user}"
-  echo "${image_project}"
-  install_gpu_driver startup_script metadata ${accelerator} ${runner_user} ${image_project}
+  install_gpu_driver startup_script metadata "${accelerator}" "${runner_user}" "${image_project}"
 
   # Run service
   start_runner \
     startup_script \
-    ${VM_ID} \
-    ${RUNNER_TOKEN} \
-    ${runner_user} \
-    ${ephemeral_flag} \
-    ${machine_zone} \
-    ${project_id}
+    "${VM_ID}" \
+    "${RUNNER_TOKEN}" \
+    "${runner_user}" \
+    "${ephemeral_flag}" \
+    "${machine_zone}" \
+    "${project_id}"
 
   # Write startup script to a file
   startup_script_path=/tmp/startup-script.sh

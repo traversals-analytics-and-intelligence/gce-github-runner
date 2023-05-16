@@ -126,12 +126,12 @@ function install_gpu_driver {
       runner_metadata="install-nvidia-driver=True"
     elif [[ -n ${image_project} ]] && [[ $(echo "${base_image_projects[@]}" | grep -ow "${image_project}" | wc -w) != 0 ]]; then
       echo "✅ Startup script will install GPU drivers on a base VM"
-      local install_gpu_drivers
-      install_gpu_drivers="$(cuda_manual_install ${runner_user})"
+      local install_cuda
+      install_cuda="$(cuda_manual_install ${runner_user})"
 
       script="
       ${script}
-      ${install_gpu_drivers}
+      ${install_cuda}
       "
     else
       echo "❌ Accelerators should only be used with Deep Learning images from project ${dl_image_project} or
