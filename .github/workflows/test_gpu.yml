@@ -1,0 +1,56 @@
+name: Test
+
+on: [workflow_dispatch]
+
+jobs:
+  create-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.create-runner.outputs.label }}
+    steps:
+      - id: create-runner
+        uses: traversals-analytics-and-intelligence/gce-github-runner@feature/gpu
+        with:
+          token: ${{ secrets.GIT_PERSONAL_ACCESS_TOKEN }}
+          project_id: ${{ secrets.GCP_GITHUB_ACTIONS_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_GITHUB_ACTIONS_SA_KEY }}
+          image_project: deeplearning-platform-release
+          image_family: common-cu113-debian-11-py310
+          accelerator_type: nvidia-tesla-t4
+          accelerator_count: 1
+          machine_zone: europe-west3-b
+          actions_preinstalled: false
+          runner_ver: 2.304.0
+          disk_size: 60
+          machine_type: n1-standard-2
+          scopes: cloud-platform
+          shutdown_timeout: 120
+          install_docker: true
+
+  test:
+    needs: create-runner
+    runs-on: ${{ needs.create-runner.outputs.label }}
+    steps:
+      - name: Check Docker
+        run: |
+          docker info
+
+      - name: Check GPU and CUDA
+        run: |
+          conda create -y -n test-gpu python=3.9
+          conda activate test-gpu
+          pip install torch
+          python -c "import torch; torch.cuda.is_available(); torch.cuda.get_device_name(0)"
+
+  delete-runner:
+    runs-on: ${{ needs.create-runner.outputs.label }}
+    if: ${{ success() }}
+    needs: [ create-runner, test ]
+    steps:
+      - name: Stop and delete the runner
+        uses: traversals-analytics-and-intelligence/gce-github-runner@feature/gpu
+        with:
+          project_id: ${{ secrets.GCP_GITHUB_ACTIONS_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_GITHUB_ACTIONS_SA_KEY }}
+          command: stop
+          shutdown_timeout: 30

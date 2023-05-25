@@ -81,6 +81,13 @@ inputs:
     description: Whether or not to install/configure the Docker daemon
     default: false
     required: false
+  accelerator_type:
+    description: The type of accelerator to attach to the VM. Either consult https://cloud.google.com/compute/docs/gpus/ or use 'gcloud compute accelerator-types list' to
+      learn about all available accelerator types.
+    required: false
+  accelerator_count:
+    description: The number of accelerators to attach to the VM. See https://cloud.google.com/compute/docs/gpus/ for more information.
+    required: false
 outputs:
   label:
     description: >-
@@ -112,4 +119,6 @@ runs:
         --actions_preinstalled=${{ inputs.actions_preinstalled }}
         --name_prefix=${{ inputs.name_prefix }}
         --install_docker=${{ inputs.install_docker }}
+        --accelerator_type=${{ inputs.accelerator_type }}
+        --accelerator_count=${{ inputs.accelerator_count }}
       shell: bash
